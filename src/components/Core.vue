@@ -1,16 +1,41 @@
 <template>
   <div id="main">
-      <div class="container">
-        <div class="row">
-          <div class="twelve columns">
-            <input @keyup.enter="fetchData()" v-model="searchObj" type="text" class="form-control username-input" placeholder="Username" aria-describedby="u-addon" autocapitalize="off" autocorrect="off">
-            <button @click="fetchData()" class="btn btn-secondary" type="button" :disabled="isLoading">Analyse</button>
+  <symbol id="icon-search" viewBox="0 0 32 32">
+  <title>search</title>
+  <path d="M31.008 27.231l-7.58-6.447c-0.784-0.705-1.622-1.029-2.299-0.998 1.789-2.096 2.87-4.815 2.87-7.787 0-6.627-5.373-12-12-12s-12 5.373-12 12 5.373 12 12 12c2.972 0 5.691-1.081 7.787-2.87-0.031 0.677 0.293 1.515 0.998 2.299l6.447 7.58c1.104 1.226 2.907 1.33 4.007 0.23s0.997-2.903-0.23-4.007zM12 20c-4.418 0-8-3.582-8-8s3.582-8 8-8 8 3.582 8 8-3.582 8-8 8z"></path>
+  </symbol>
+    <div class="container full">
+      <div class="row">
+        <div class="twelve columns">
+        <div class="search-wrapper">
+          <svg class="icon icon-search"><use xlink:href="#icon-search"></use></svg>
+          <input v-model="searchObj" type="text" class="form-control search-input" placeholder="Filter" aria-describedby="u-addon" autocapitalize="off" autocorrect="off">
+          <!-- <button @click="fetchData()" class="btn btn-secondary" type="button" :disabled="isLoading">Analyse</button> -->
+          <div class="menu-wrapper">
+            <ul>
+              <li v-on:click='fetchData("new")' :class='{ active: currentSource.sortnew }' class="item">new</li>
+              <li v-on:click='fetchData("hot")' :class='{ active: currentSource.sorthot }' class="item">hot</li>
+              <li v-on:click='toggleCategory("buying")' :class='{ Tactive: currentCategory.buying }' class="item -buying">buying</li>
+              <li v-on:click='toggleCategory("selling")' :class='{ Tactive: currentCategory.selling }' class="item -selling">selling</li>
+              <li v-on:click='toggleCategory("trading")' :class='{ Tactive: currentCategory.trading }' class="item -trading">trading</li>
+            </ul>
           </div>
         </div>
+        </div>
       </div>
-      <post-summary :newPosts="newPosts">
-      </post-summary>
     </div>
+    <post-summary :newPosts="newPosts"
+                  :tradingPosts="tradingPosts"
+                  :sellingPosts="sellingPosts"
+                  :buyingPosts="buyingPosts"
+                  :venderPosts="venderPosts"
+                  :gbPosts="gbPosts"
+                  :soldPosts="soldPosts"
+                  :stickyPosts="stickyPosts"
+                  :currentCategory="currentCategory"
+                  :searchObj="searchObj">
+    </post-summary>
+  </div>
 </template>
 
 <script>
@@ -23,28 +48,43 @@ export default {
   data () {
     return {
       searchObj: '',
+      limit: '40',
       username: '',
-      comments: [],
-      submitted: [],
       newPosts: [],
+      tradingPosts: [],
+      sellingPosts: [],
+      buyingPosts: [],
+      venderPosts: [],
+      gbPosts: [],
+      soldPosts: [],
+      stickyPosts: [],
       isLoading: false,
       notFound: false,
-      noPosts: false,
-      finished: {
-        comments: false,
-        submitted: false
+      noPosts: true,
+      isBuying: true,
+      isSelling: false,
+      currentSource: {
+        sortnew: true,
+        sorthot: false,
+      },
+      currentCategory: {
+        buying: true,
+        selling: false,
+        trading: false,
       }
     }
   },
   mounted() {
-    this.$watch('searchObj', () => {
-      this.reset();
-    });
-    // Auto fetch
-    if (window.location.hash !== '') {
-      this.searchObj = window.location.hash.split('#').pop().trim();
-      this.fetchData();
-    }
+    // this.$watch('searchObj', () => {
+    //   // this.reset();
+    // });
+    // // Auto fetch
+    // if (window.location.hash !== '') {
+    //   this.searchObj = window.location.hash.split('#').pop().trim();
+    //   this.fetchData();
+    // }
+    this.fetchData('new');
+    this.fetchStickied('hot');
   },
   computed: {
     valid() {
@@ -58,42 +98,58 @@ export default {
   methods: {
     reset() {
       this.notFound = false;
-      this.noPosts = false;
-      this.finished.comments = false;
-      this.finished.submitted = false;
-      this.comments = [];
-      this.submitted = [];
+      // this.noPosts = false;
       this.newPosts = [];
+      this.tradingPosts = [],
+      this.sellingPosts = [],
+      this.buyingPosts = [],
+      this.venderPosts = [],
+      this.gbPosts = [],
+      this.soldPosts = []
+      // this.stickyPosts = [],
+      // this.currentSource.sortnew = true;
+      // this.currentSource.sorthot = false;
     },
-    fetchData() {
-      if (this.searchObj === "" || /[^a-zA-Z0-9_-]/.test(this.searchObj)) return;
+    toggleSource() {
+      this.currentSource.sortnew = !this.currentSource.sortnew;
+      this.currentSource.sorthot = !this.currentSource.sorthot;
+    },
+    toggleCategory(category) {
+      if (category in this.currentCategory) {
+        this.currentCategory[category] = !this.currentCategory[category];
+      }
+    },
+    fetchData(type) {
+      // if (this.searchObj === "" || /[^a-zA-Z0-9_-]/.test(this.searchObj)) return;
       this.reset();
-      document.title = `Searching for ${this.searchObj} – mmbuddy`;
-      window.history.replaceState({}, "", `#${this.searchObj}`);
+      if (this.noPosts == false) this.toggleSource();
+      // document.title = `Searching for ${this.searchObj} – mmbuddy`;
+      // window.history.replaceState({}, "", `#${this.searchObj}`);
       this.isLoading = true;
-      this.fetchAbout();
-      // this.fetchCombined('comments');
+      this.fetchAdv(type);
       // this.fetchCombined('submitted');
     },
-    fetchAbout() {
-      // this.$http.get(`https://www.reddit.com/r/mechmarket/search.json?q=${this.searchObj}`)
-      this.$http.get('https://www.reddit.com/r/mechmarket/new/.json')
+    fetchStickied(data) {
+      this.$http.get(`https://www.reddit.com/r/mechmarket/${data}/.json`)
       .then(response => {
-        // console.log()
         this.about = response.body.data;
+        console.log(this.about);
         let arr = response.body.data.children;
-        console.log(response);
         if (!arr.length) {
           this.isLoading = false;
           this.finished[type] = true;
-          if (!this[type].length && this.finished.comments && this.finished.submitted && !this.comments.length && !this.submitted.length)
+          if (!this[type].length)
               this.noPosts = true;
           return;
         }
         arr.forEach(item => {
-          this.newPosts.push(item);
+          if (item.data.stickied) {
+            this.stickyPosts.push(item);
+          };
         });
-        this.finished[type] = true;
+        // this.currentChoice. = false;
+        this.currentChoice['sort'+type] = true;
+        console.log('sort'+type);
       }).catch(response => {
         if (response.status === 404) {
           this.notFound = true;
@@ -101,38 +157,76 @@ export default {
         }
       });
     },
-    fetchCombined(type, after = "") {
-        this.$http.get(`https://www.reddit.com/r/mechmarket/search/.json?q=${this.searchObj}&sort=new&restrict_sr=True`)
-        .then(response => {
-            let arr = response.body.data.children;
-            console.log(response)
-            // No more posts
-            if (!arr.length) {
-              this.isLoading = false;
-              this.finished[type] = true;
-              if (!this[type].length && this.finished.comments && this.finished.submitted && !this.comments.length && !this.submitted.length)
-                  this.noPosts = true;
-              return;
-            }
-            // Add additional posts to array
-            arr.forEach(item => {
-              this[type].push(item);
-            });
-            // If there's (almost certainly) more, recursively fetch more
-            if (arr.length == 100) {
-              this.fetchCombined(type, arr[99].data.name);
-              return;
-            }
+    fetchAdv(type) {
+      // this.$http.get(`https://www.reddit.com/r/mechmarket/search.json?q=${this.searchObj}`)
+      this.$http.get(`https://www.reddit.com/r/mechmarket/${type}/.json?limit=${this.limit}`)
+      .then(response => {
+        this.about = response.body.data;
+        let arr = response.body.data.children;
+        console.log(response);
+        if (!arr.length) {
+          this.isLoading = false;
           this.finished[type] = true;
-          if (this.finished.comments && this.finished.submitted)
-            this.isLoading = false;
-        }).catch(response => {
-            if (response.status === 404) {
-              this.notFound = true;
-              this.isLoading = false;
-            }
+          if (!this[type].length)
+              this.noPosts = true;
+          return;
+        }
+        arr.forEach(item => {
+          // if (item.data.stickied) {
+          //   this.stickyPosts.push(item);
+          // };
+          if (item.data.link_flair_text == 'Trading'){
+            this.tradingPosts.push(item);
+          };
+          if (item.data.link_flair_text == 'Selling'){
+            this.sellingPosts.push(item);
+          };
+          if (item.data.link_flair_text == 'Buying'){
+            this.buyingPosts.push(item);
+          };
         });
-    }
+        this.noPosts = false;
+        // this.currentSource['sort'+type] = true;
+        console.log('sort'+type);
+      }).catch(response => {
+        if (response.status === 404) {
+          this.notFound = true;
+          this.isLoading = false;
+        }
+      });
+    },
+    // fetchCombined(type, after = "") {
+    //     this.$http.get(`https://www.reddit.com/r/mechmarket/search/.json?q=${this.searchObj}&sort=new&restrict_sr=True`)
+    //     .then(response => {
+    //         let arr = response.body.data.children;
+    //         console.log(response)
+    //         // No more posts
+    //         if (!arr.length) {
+    //           this.isLoading = false;
+    //           this.finished[type] = true;
+    //           if (!this[type].length)
+    //               this.noPosts = true;
+    //           return;
+    //         }
+    //         // Add additional posts to array
+    //         arr.forEach(item => {
+    //           this[type].push(item);
+    //         });
+    //         // If there's (almost certainly) more, recursively fetch more
+    //         if (arr.length == 100) {
+    //           this.fetchCombined(type, arr[99].data.name);
+    //           return;
+    //         }
+    //       this.finished[type] = true;
+    //       if (this.finished.comments && this.finished.submitted)
+    //         this.isLoading = false;
+    //     }).catch(response => {
+    //         if (response.status === 404) {
+    //           this.notFound = true;
+    //           this.isLoading = false;
+    //         }
+    //     });
+    // }
   }
 }
 </script>
@@ -141,10 +235,10 @@ export default {
 html {
   box-sizing: border-box;
   font-size: 62.5%;
-  margin: 0;
-  padding: 0;
 }
 body {
+  margin: 0;
+  padding: 0;
   font-family: 'Avenir', -apple-system,
           BlinkMacSystemFont,
           "Segoe UI",
@@ -154,15 +248,90 @@ body {
           Cantarell,
           "Helvetica Neue",
           sans-serif;
-  background-color: #fff;
+  // background-color: #fff;
+  background-color: #ECECEC;
   line-height: 1.6;
   letter-spacing: 0.01rem;
   font-weight: 400;
 }
+.search-wrapper {
+  width: 100%;
+  height: 40vh;
+  margin: 0 auto;
+  // box-shadow: 0 25px 40px -20px #E4E7EA;
+  // border-radius: 5px;
+  margin-bottom: 5%;
+  background-color: #F2F2F2;
+  position: relative;
+  .menu-wrapper {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    ul {
+      // width: 120px;
+      li {
+        display: inline-block;
+        left: 0;
+        margin-bottom: 2em;
+        cursor: pointer;
+        color: darken(#ECECEC, 20%);
+        font-size: 2rem;
+        &.item {
+          margin: .5em 1em .5em 1em;
+        }
+        &.-selling {
+          color: #f5b400;
+        }
+        &.-buying {
+          color: #5b92fa;
+        }
+        &.-trading {
+          color: #9f46f2;
+        }
+        &.active {
+          text-decoration: underline;
+          color: #333333;
+        }
+        &.Tactive {
+          text-decoration: underline;
+        }
+      }
+    }
+  }
+}
+.form-control {
+  background-color: #F2F2F2;
+  margin: 1em;
+  // margin-top: 5em;
+  width: 30%;
+  border: 0;
+  outline: none;
+  border-bottom: 1px #939393 solid;
+  line-height: 1.6;
+  height: 50px;
+  font-size: 2rem;
+  padding-left: 30px;
+  padding-top: 5em;
+}
+.icon {
+  position: absolute;
+  display: inline;
+  width: 2em;
+  height: 2em;
+  margin-left: 15px;
+  margin-top: 13.2em;
+  stroke-width: 0;
+  fill: #939393;
+  // fill: currentColor;
+}
+.full {
+  width: 100% !important;
+  max-width: 100% !important;
+}
 .container {
   position: relative;
-  width: 100%;
-  max-width: 100%;
+  width: 90%;
+  max-width: 90%;
   margin: 0 auto;
   padding: 0 1.25em;
   box-sizing: border-box;

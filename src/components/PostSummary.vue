@@ -1,14 +1,41 @@
 <template>
-    <div class="row">
-      <div class="four columns offset-by-four">
-        <div class="results-card" v-for="post in newPosts">
-          <h1 class="result-type" :class="flairTextSetter(post.data.link_flair_text)">{{post.data.link_flair_text}}</h1>
-          <h2>{{ findLocation(post.data.title) }}</h2>
-          <h3>{{ findWant(post.data.title) }}</h3>
-          <h4>{{ findHave(post.data.title) }}</h4>
+  <div class="container">
+  <div class="row">
+      <div class="four columns offset-by-eight">
+          <div class="sticky-card">
+            <div class="result-data">
+                <a v-for="post in stickyPosts" :href="post.data.url"><span>{{post.data.title}}</span></a>
+            </div>
+          </div>
+      </div>
+  </div>
+  <div class="row">
+    <div v-if="this.currentCategory.selling" class="twelve columns">
+      <div class="results-card -selling">
+        <h1 class="result-type -selling">Selling</h1>
+        <div class="result-data">
+          <a v-for="post in filteredSellingList" :href="post.data.url"><span>{{findHave(post.data.title)}} - ({{ findLocation(post.data.title) }})</span></a>
         </div>
       </div>
     </div>
+    <div v-if="this.currentCategory.buying" class="twelve columns">
+      <div class="results-card -buying">
+        <h1 class="result-type -buying">Buying</h1>
+        <div class="result-data">
+          <a v-for="post in filteredBuyingList" :href="post.data.url"><span>{{findWant(post.data.title)}} - ({{ findLocation(post.data.title) }})</span></a>
+        </div>
+      </div>
+    </div>
+    <div v-if="this.currentCategory.trading" class="twelve columns">
+      <div class="results-card -trading">
+        <h1 class="result-type -trading">Trading</h1>
+        <div class="result-data">
+          <a v-for="post in tradingPosts" :href="post.data.url"><span>{{findWant(post.data.title)}} <span class="trade">for</span> {{findHave(post.data.title)}} ({{ findLocation(post.data.title) }})</span></a>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
 </template>
 
 <script>
@@ -17,27 +44,24 @@ export default {
     name: 'post-summary',
     components: {
     },
-    props: ['username', 'about', 'comments', 'submitted', 'isLoading', 'newPosts'],
+    props: ['newPosts', 'tradingPosts', 'sellingPosts', 'buyingPosts', 'venderPosts', 'gbPosts', 'stickyPosts', 'currentCategory', 'searchObj'],
     data() {
         return {
-            subreddits: {},
-            commentKarma: 0,
-            submittedKarma: 0,
-            subredditCounts: [],
-            wordCounts: [],
-            daysComments: [],
-            daysSubmitted: [],
-            allDaysComments: [],
-            allDaysSubmitted: [],
-            numSubreddits: 10,
-            numFrequentWords: 15,
-            badWordIncidence: 0,
-            niceWordIncidence: 0,
-            readingLevel: 0,
-            commentsSortedByScore: null
         }
     },
     computed: {
+      filteredBuyingList() {
+        return this.buyingPosts.filter((post) => {
+          // console.log(post.data.title);
+          return post.data.title.toLowerCase().includes(this.searchObj);
+        })
+      },
+      filteredSellingList() {
+        return this.sellingPosts.filter((post) => {
+          // console.log(post.data.title);
+          return post.data.title.toLowerCase().includes(this.searchObj);
+        })
+      },
         topSubreddits() {
             if (this.isLoading) {
                 this.newUser = true;
@@ -120,19 +144,19 @@ export default {
         },
         findLocation(title) {
           let content = title.match(/\[(.*?)\]/)[1];
-          console.log('location: ' + content);
+          // console.log('location: ' + content);
           return content;
         },
         findHave(title) {
           let content = title.match(/\](.*?)\[/g)[1];
           let contentCut = content.replace(/[\[\]']/g,'' );
-          console.log('have: ' + contentCut);
+          // console.log('have: ' + contentCut);
           return contentCut;
         },
         findWant(title) {
           let content = title.match(/[W](.*)/)[1];
           let contentCut = content.replace(/[\[\]']/g,'' );
-          console.log('want: ' + contentCut);
+          // console.log('want: ' + contentCut);
           return contentCut;
         },
         calculateSubredditCounts() {
@@ -279,38 +303,6 @@ export default {
                 return moment(1000 * timestamp).format("MMM Do, YYYY");
             }
         },
-        smoothGraph() {
-            let numDays = this.allDaysComments.length;
-            if (numDays < 50) {
-                numDays = 50;
-            }
-            let smoothingFactor = Math.round(numDays/50);
-            let counter = 0;
-            let counterSubmitted = 0;
-            let days = [];
-            this.allDaysComments.forEach(day => {
-                if (counter % smoothingFactor === 0) {
-                    days.push(day);
-                }
-                counter++;
-            });
-            this.daysComments = days;
-            // reset
-            days = [];
-            counter = 0;
-            numDays = this.allDaysSubmitted.length;
-            if (numDays < 50) {
-                numDays = 50;
-            }
-            smoothingFactor = Math.round(numDays/50);
-            this.allDaysSubmitted.forEach(day => {
-                if (counter % smoothingFactor === 0) {
-                    days.push(day);
-                }
-                counter++;
-            });
-            this.daysSubmitted = days;
-        },
         cumulative() {
             let cumulativeNumComments = 0;
             let cumulativeCommentKarma = 0;
@@ -333,23 +325,94 @@ export default {
 }
 </script>
 <style lang="scss">
+  .sticky-card {
+    // position: relative;
+    .result-data {
+      position: absolute;
+      right: -2%;
+      top: 0;
+      text-align: right;
+      text-transform: uppercase;
+    }
+    a {
+      text-decoration: none;
+      color: #333;
+      display: block;
+      font-size: 1.6rem;
+      margin-top: 1.2em;
+      height: auto;
+      &:hover {
+        color: darken(#ECECEC, 20%);
+        text-decoration: underline;
+      }
+    }
+  }
   .results-card {
-  // box-shadow: 0 25px 40px -20px #efefef;
-  box-shadow: 0 2px 2px 0 rgba(0,0,0,0.16), 0 0 0 1px rgba(0,0,0,0.08);
+  // box-shadow: 0 25px 40px -20px #85a2ce;
+  // background: #fff;
+  border-radius: 5px;
   margin-bottom: 3em;
-  height: 300px;
+  // width: 400px;
+  height: auto;
+  padding: 2em 2em;
+  padding-top: 0;
+  text-align: left;
+  overflow: hidden;
+  transition: box-shadow .4s;
+  &:hover {
+    box-shadow: 0 20px 40px -20px #6980a3;
+  }
+  .result-data {
+    padding-top: 3em;
+    .trade {
+      color: #9f46f2 !important;
+      font-weight: bold;
+    }
+  }
+  a {
+    display: inline-flex;
+    font-size: 1.3rem;
+    margin: 3em;
+    text-decoration: none;
+    // color: #6B8C9D;
+    // color: #939393;
+    color: #717171;
+    // width: 400px;
+    &:hover {
+      text-decoration: underline;
+      color: darken(#717171, 20%);
+    }
+  }
+  &.-selling {
+    left: 0;
+  }
   .result-type {
-    // width: 4em;
-    // top: 50px;
+    top: -.5em;
     position: relative;
-    font-size: 3em;
+    text-align: left;
+    // padding-left: 15%;
+    font-size: 2.2em;
+    text-transform: uppercase;
+    // &:before {
+    //   display: block;
+    //   position: absolute;
+    //   right: -30;
+    //   margin: 0 auto;
+    //   top: 2em;
+    //   width: 92%;
+    //   height: 1px;
+    //   background: #EFF2F7;
+    //   content: '';
+    //   margin-bottom: 1em;
+    // }
     &.-buying {
       color: #5b92fa;
     }
     &.-selling {
       color: #f5b400;
     }
-    .result-have {
+    &.-trading {
+      color: #9f46f2;
     }
   }
 }

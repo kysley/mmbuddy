@@ -2,6 +2,7 @@ import Vue from 'vue'
 import App from './App.vue'
 import VueResource from 'vue-resource'
 import 'babel-polyfill'
+import store from './store.js'
 
 Vue.use(VueResource)
 

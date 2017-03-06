@@ -13,8 +13,8 @@
           <!-- <button @click="fetchData()" class="btn btn-secondary" type="button" :disabled="isLoading">Analyse</button> -->
           <div class="menu-wrapper">
             <ul>
-              <li v-on:click='fetchData("new")' :class='{ active: currentSource.sortnew }' class="item">new</li>
-              <li v-on:click='fetchData("hot")' :class='{ active: currentSource.sorthot }' class="item">hot</li>
+              <li v-on:click='toggleSource(), fetchData("new")' :class='{ active: checkNew }' class="item">new</li>
+              <li v-on:click='toggleSource(), fetchData("hot")' :class='{ active: !checkNew }' class="item">hot</li>
               <li v-on:click='toggleCategory("buying")' :class='{ Tactive: currentCategory.buying }' class="item -buying">buying</li>
               <li v-on:click='toggleCategory("selling")' :class='{ Tactive: currentCategory.selling }' class="item -selling">selling</li>
               <li v-on:click='toggleCategory("trading")' :class='{ Tactive: currentCategory.trading }' class="item -trading">trading</li>
@@ -39,9 +39,13 @@
 </template>
 
 <script>
+// import the localStorage controller
+import store from '../store'
+// import component
 import PostSummary from './PostSummary.vue'
 export default {
   name: 'core',
+  // require the component
   components: {
     PostSummary
   },
@@ -63,10 +67,12 @@ export default {
       noPosts: true,
       isBuying: true,
       isSelling: false,
+      // Control whether the user is getting new or hot posts
       currentSource: {
-        sortnew: true,
-        sorthot: false,
+        sortnew: '',
+        sorthot: '',
       },
+      // Control which categories are shown
       currentCategory: {
         buying: true,
         selling: false,
@@ -74,17 +80,31 @@ export default {
       }
     }
   },
+  // Before the view is rendered make sure to grab the latest info from localStorage
+  created() {
+    // Grab the stored value quick
+    this.currentSource.sortnew = JSON.parse(store.getSortNew());
+    // If this is the users first time visiting the page sortnew will be null,
+    // so we need to set that
+    if (this.currentSource.sortnew == null) {
+      console.log('fixing empty params');
+      this.currentSource.sortnew = true;
+      // Set the value to true then grab it right after
+      // There may be a more efficient way to go through this.. probably ternary?
+      store.setSource(this.currentSource.sortnew);
+      this.currentSource.sortnew = JSON.parse(store.getSortNew());
+    };
+
+    // Ending comment for created() runtime
+    console.log('finished localStorage');
+    console.log('results(new):');
+    console.log(this.currentSource.sortnew);
+
+  },
   mounted() {
-    // this.$watch('searchObj', () => {
-    //   // this.reset();
-    // });
-    // // Auto fetch
-    // if (window.location.hash !== '') {
-    //   this.searchObj = window.location.hash.split('#').pop().trim();
-    //   this.fetchData();
-    // }
-    this.fetchData('new');
-    this.fetchStickied('hot');
+    // This happens after created(), so Vue already knows which Source to call
+    this.fetchData();
+    // this.fetchStickied('hot');
   },
   computed: {
     valid() {
@@ -93,12 +113,19 @@ export default {
     finishedLoading() {
       if (!this.comments.length && !this.submitted.length) return;
       return this.finished.comments && this.finished.submitted;
+    },
+    checkNew() {
+      // Log whats going on
+      console.log('new(comp)');
+      console.log(this.currentSource.sortnew);
+      // This return determines whether or not 'new' or 'hot' category is shown
+      return this.currentSource.sortnew;
     }
   },
   methods: {
+    // I don't think this will be used other than fetching a new source, but its here
     reset() {
       this.notFound = false;
-      // this.noPosts = false;
       this.newPosts = [];
       this.tradingPosts = [],
       this.sellingPosts = [],
@@ -106,35 +133,42 @@ export default {
       this.venderPosts = [],
       this.gbPosts = [],
       this.soldPosts = []
-      // this.stickyPosts = [],
-      // this.currentSource.sortnew = true;
-      // this.currentSource.sorthot = false;
     },
+    // Switches between 'new' and 'hot' and saves it to localStorage
     toggleSource() {
+      console.log('toggling source');
       this.currentSource.sortnew = !this.currentSource.sortnew;
-      this.currentSource.sorthot = !this.currentSource.sorthot;
+      // this.currentSource.sorthot = !this.currentSource.sorthot;
+      store.setSource(this.currentSource.sortnew, this.currentSource.sorthot);
     },
+    // Toggles whether a category is shown or not
     toggleCategory(category) {
       if (category in this.currentCategory) {
         this.currentCategory[category] = !this.currentCategory[category];
       }
     },
-    fetchData(type) {
+    // Directs to fetching the specific source and clears the data that is currently shown
+    fetchData() {
+      let type = this.currentSource.sortnew ? 'new' : 'hot';
+      console.log('TYPE: ');
+      console.log(type);
       // if (this.searchObj === "" || /[^a-zA-Z0-9_-]/.test(this.searchObj)) return;
       this.reset();
-      if (this.noPosts == false) this.toggleSource();
       // document.title = `Searching for ${this.searchObj} – mmbuddy`;
       // window.history.replaceState({}, "", `#${this.searchObj}`);
       this.isLoading = true;
       this.fetchAdv(type);
-      // this.fetchCombined('submitted');
     },
+    // Grab ONLY the stickied posts
+    // Ideally this should only be done every few days, TODO
     fetchStickied(data) {
       this.$http.get(`https://www.reddit.com/r/mechmarket/${data}/.json`)
       .then(response => {
-        this.about = response.body.data;
-        console.log(this.about);
+        // Grab the response
+        // this.about = response.body.data;
+        // console.log(this.about);
         let arr = response.body.data.children;
+        // If nothing is in the response
         if (!arr.length) {
           this.isLoading = false;
           this.finished[type] = true;
@@ -142,14 +176,12 @@ export default {
               this.noPosts = true;
           return;
         }
+        // If the post is sticked put it into the array
         arr.forEach(item => {
           if (item.data.stickied) {
             this.stickyPosts.push(item);
           };
         });
-        // this.currentChoice. = false;
-        this.currentChoice['sort'+type] = true;
-        console.log('sort'+type);
       }).catch(response => {
         if (response.status === 404) {
           this.notFound = true;
@@ -157,10 +189,11 @@ export default {
         }
       });
     },
+    // Grab n posts from either 'new' or 'hot' and do some stuff with it
     fetchAdv(type) {
-      // this.$http.get(`https://www.reddit.com/r/mechmarket/search.json?q=${this.searchObj}`)
       this.$http.get(`https://www.reddit.com/r/mechmarket/${type}/.json?limit=${this.limit}`)
       .then(response => {
+        // Same as above
         this.about = response.body.data;
         let arr = response.body.data.children;
         console.log(response);
@@ -171,10 +204,8 @@ export default {
               this.noPosts = true;
           return;
         }
+        // For each post sort it accordingly
         arr.forEach(item => {
-          // if (item.data.stickied) {
-          //   this.stickyPosts.push(item);
-          // };
           if (item.data.link_flair_text == 'Trading'){
             this.tradingPosts.push(item);
           };
@@ -189,44 +220,15 @@ export default {
         // this.currentSource['sort'+type] = true;
         console.log('sort'+type);
       }).catch(response => {
-        if (response.status === 404) {
+        console.log('catch');
+        console.log('resp'+response.status);
+        if (response.status === 502) {
+          console.info("ASdSDASDAS");
           this.notFound = true;
           this.isLoading = false;
         }
       });
     },
-    // fetchCombined(type, after = "") {
-    //     this.$http.get(`https://www.reddit.com/r/mechmarket/search/.json?q=${this.searchObj}&sort=new&restrict_sr=True`)
-    //     .then(response => {
-    //         let arr = response.body.data.children;
-    //         console.log(response)
-    //         // No more posts
-    //         if (!arr.length) {
-    //           this.isLoading = false;
-    //           this.finished[type] = true;
-    //           if (!this[type].length)
-    //               this.noPosts = true;
-    //           return;
-    //         }
-    //         // Add additional posts to array
-    //         arr.forEach(item => {
-    //           this[type].push(item);
-    //         });
-    //         // If there's (almost certainly) more, recursively fetch more
-    //         if (arr.length == 100) {
-    //           this.fetchCombined(type, arr[99].data.name);
-    //           return;
-    //         }
-    //       this.finished[type] = true;
-    //       if (this.finished.comments && this.finished.submitted)
-    //         this.isLoading = false;
-    //     }).catch(response => {
-    //         if (response.status === 404) {
-    //           this.notFound = true;
-    //           this.isLoading = false;
-    //         }
-    //     });
-    // }
   }
 }
 </script>
@@ -256,13 +258,14 @@ body {
 }
 .search-wrapper {
   width: 100%;
-  height: 40vh;
+  height: 19vh;
   margin: 0 auto;
   // box-shadow: 0 25px 40px -20px #E4E7EA;
   // border-radius: 5px;
   margin-bottom: 5%;
   background-color: #F2F2F2;
-  position: relative;
+  position: fixed;
+  z-index: 101;
   .menu-wrapper {
     position: absolute;
     left: 0;
@@ -311,7 +314,7 @@ body {
   height: 50px;
   font-size: 2rem;
   padding-left: 30px;
-  padding-top: 5em;
+  padding-top: 5vh;
 }
 .icon {
   position: absolute;
@@ -319,7 +322,7 @@ body {
   width: 2em;
   height: 2em;
   margin-left: 15px;
-  margin-top: 13.2em;
+  margin-top: 9vh;
   stroke-width: 0;
   fill: #939393;
   // fill: currentColor;

@@ -7,11 +7,22 @@
     <div class="container full">
       <div class="row">
         <div class="twelve columns">
+        <h1 class="summary">Summary</h1>
         <div class="search-wrapper">
-          <svg class="icon icon-search"><use xlink:href="#icon-search"></use></svg>
-          <input v-model="searchObj" type="text" class="form-control search-input" placeholder="Filter" aria-describedby="u-addon" autocapitalize="off" autocorrect="off">
+        <div class="three columns summary-box">
+          <span class="summary-desc">posts in last 24h</span>
+          <span v-if="checktfHError" class="summary-error">error getting information :(</span>
+          <span v-show="!checktfHError" class="summary-info">{{ getPosts24H }}</span>
+        </div>
+        <div class="three columns summary-box">
+          <span class="summary-desc">posts since last visit</span>
+          <span v-show="checkMinusError" class="summary-error">error getting information :(</span>
+          <span v-show="!checkMinusError" class="summary-info">{{ getPostsSince }}</span>
+        </div>
+          <!-- <svg class="icon icon-search"><use xlink:href="#icon-search"></use></svg> -->
+          <!-- <input v-model="searchObj" type="text" class="form-control search-input" placeholder="Search MechMarket eg. DSA, Let's Split, HHKB" aria-describedby="u-addon" autocapitalize="off" autocorrect="off"> -->
           <!-- <button @click="fetchData()" class="btn btn-secondary" type="button" :disabled="isLoading">Analyse</button> -->
-          <div class="menu-wrapper">
+         <!--  <div class="menu-wrapper">
             <ul>
               <li v-on:click='toggleSource(), fetchData("new")' :class='{ active: checkNew }' class="item">new</li>
               <li v-on:click='toggleSource(), fetchData("hot")' :class='{ active: !checkNew }' class="item">hot</li>
@@ -19,7 +30,7 @@
               <li v-on:click='toggleCategory("selling")' :class='{ Tactive: currentCategory.selling }' class="item -selling">selling</li>
               <li v-on:click='toggleCategory("trading")' :class='{ Tactive: currentCategory.trading }' class="item -trading">trading</li>
             </ul>
-          </div>
+          </div> -->
         </div>
         </div>
       </div>
@@ -62,6 +73,11 @@ export default {
       gbPosts: [],
       soldPosts: [],
       stickyPosts: [],
+      epoch: Math.round(new Date() / 1000),
+      epochMinus: Math.round(new Date() / 1000) - 86400,
+      lastVisitEpoch: '',
+      postsSinceEpochMinus: '',
+      postsSinceLastVisit: '',
       isLoading: false,
       notFound: false,
       noPosts: true,
@@ -74,16 +90,21 @@ export default {
       },
       // Control which categories are shown
       currentCategory: {
-        buying: true,
+        buying: false,
         selling: false,
         trading: false,
+      },
+      epochError: {
+        tfH: false,
+        minus: false,
       }
     }
   },
   // Before the view is rendered make sure to grab the latest info from localStorage
   created() {
-    // Grab the stored value quick
+    // Grab the stored values quick
     this.currentSource.sortnew = JSON.parse(store.getSortNew());
+    this.lastVisitEpoch = JSON.parse(store.getVisitEpoch());
     // If this is the users first time visiting the page sortnew will be null,
     // so we need to set that
     if (this.currentSource.sortnew == null) {
@@ -93,6 +114,11 @@ export default {
       // There may be a more efficient way to go through this.. probably ternary?
       store.setSource(this.currentSource.sortnew);
       this.currentSource.sortnew = JSON.parse(store.getSortNew());
+    };
+    // Check if it's the users first visit...
+    if (this.lastVisitEpoch == null) {
+      this.lastVisitEpoch = this.epoch;
+      store.setVisitEpoch(this.lastVisitEpoch);
     };
 
     // Ending comment for created() runtime
@@ -104,7 +130,14 @@ export default {
   mounted() {
     // This happens after created(), so Vue already knows which Source to call
     this.fetchData();
+    this.fetchEpoch24H();
+    this.fetchEpochLast();
     // this.fetchStickied('hot');
+  },
+  destroy() {
+    this.lastVisitEpoch = Math.round(new Date() / 1000);
+    store.setVisitEpoch(this.lastVisitEpoch);
+    console.log('called');
   },
   computed: {
     valid() {
@@ -120,6 +153,18 @@ export default {
       console.log(this.currentSource.sortnew);
       // This return determines whether or not 'new' or 'hot' category is shown
       return this.currentSource.sortnew;
+    },
+    getPosts24H() {
+      return this.postsSinceEpochMinus;
+    },
+    getPostsSince() {
+      return this.postsSinceLastVisit;
+    },
+    checkMinusError() {
+      return this.epochError.minus;
+    },
+    checktfHError() {
+      return this.epochError.tfH;
     }
   },
   methods: {
@@ -158,6 +203,48 @@ export default {
       // window.history.replaceState({}, "", `#${this.searchObj}`);
       this.isLoading = true;
       this.fetchAdv(type);
+    },
+    fetchEpochLast(after='') {
+      this.$http.get(`http://www.reddit.com/r/mechmarket/search/.json?limit=100&after=${after}&q=timestamp%3A${this.lastVisitEpoch}..${this.epoch}&restrict_sr=on&syntax=cloudsearch`)
+      .then(response => {
+        this.postsSinceLastVisit += response.body.data.children.length;
+        let arrLen = response.body.data.children.length;
+        let arr = response.body.data.children;
+
+        console.log(response);
+        console.log(this.postsSinceLastVisit);
+        if (arrLen == 100 && this.postsSinceLastVisit <= 200) {
+          this.fetchEpochLast(arr[99].data.name);
+          return;
+        }
+      }).catch(response => {
+        if (response.status == 503 && this.postsSinceLastVisit != '') {
+          this.postsSinceLastVisit = '100+';
+        }
+        console.log('last visit failed');
+        this.epochError.minus = true;
+      })
+    },
+    fetchEpoch24H(after='') {
+      this.$http.get(`http://www.reddit.com/r/mechmarket/search/.json?limit=100&after=${after}&q=timestamp%3A${this.epochMinus}..${this.epoch}&restrict_sr=on&syntax=cloudsearch`)
+      .then(response => {
+        this.postsSinceEpochMinus += response.body.data.children.length;
+        let arrLen = response.body.data.children.length;
+        let arr = response.body.data.children;
+
+        console.log(response);
+        console.log(this.postsSinceEpochMinus);
+        if (arrLen == 100) {
+          this.postsSinceEpochMinus = '100+';
+          return;
+        }
+      }).catch(response => {
+        if (response.status == 503 && this.postsSinceEpochMinus != null) {
+          // this.postsSinceEpochMinus = '100+';
+          console.log('24H failed');
+          this.epochError.tfH = true;
+        }
+      })
     },
     // Grab ONLY the stickied posts
     // Ideally this should only be done every few days, TODO
@@ -251,19 +338,70 @@ body {
           "Helvetica Neue",
           sans-serif;
   // background-color: #fff;
-  background-color: #ECECEC;
+  background-color: #F2F2F2;
   line-height: 1.6;
   letter-spacing: 0.01rem;
   font-weight: 400;
 }
+.summary-box {
+  position: relative;
+  height: 100%;
+  background: #FFF;
+  margin-left: 0% !important;
+  &:nth-of-type(1) {
+    &:after {
+      display: block;
+      content: '';
+      background: #F1F1F1;
+      width: 1px;
+      height: 65%;
+      position: absolute;
+      top: 16.5%;
+      right: 0;
+    }
+  }
+  .summary-desc {
+    position: absolute;
+    top: 25%;
+    left: 20%;
+    text-transform: uppercase;
+    font-size: 1.3rem;
+    color: #9e9e9e;
+  }
+  .summary-error {
+    position: absolute;
+    top: 35%;
+    margin-left: -32%;
+    text-transform: uppercase;
+    font-size: 1.5rem;
+    color: #5b92fa;
+  }
+  .summary-info {
+    position: absolute;
+    top: 27%;
+    margin-left: -32%;
+    font-size: 6rem;
+    color: #5b92fa;
+  }
+}
+.summary {
+  color: darken(#42425A,10%);
+  font-weight: 300;
+  font-size: 4rem;
+  width: 4em;
+  left: 16vw;
+  position: absolute;
+}
 .search-wrapper {
-  width: 100%;
-  height: 19vh;
+  width: 85vw;
+  height: 30vh;
   margin: 0 auto;
-  // box-shadow: 0 25px 40px -20px #E4E7EA;
+  right: -1vw;
+  top: 10vh;
   // border-radius: 5px;
+  // box-shadow: 0 25px 40px -20px #E4E7EA;
   margin-bottom: 5%;
-  background-color: #F2F2F2;
+  background-color: darken(#42425A,10%);
   position: fixed;
   z-index: 101;
   .menu-wrapper {
@@ -303,7 +441,7 @@ body {
   }
 }
 .form-control {
-  background-color: #F2F2F2;
+  background-color: darken(#42425A,10%);
   margin: 1em;
   // margin-top: 5em;
   width: 30%;

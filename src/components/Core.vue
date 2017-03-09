@@ -7,8 +7,9 @@
     <div class="container full">
       <div class="row">
         <div class="twelve columns">
-        <h1 class="summary">Summary</h1>
-        <div class="search-wrapper">
+        <transition name="slide-fade">
+        <div class="search-wrapper" v-show="!showSummary">
+        <h1 class="summary">Welcome, here's a quick summary of mechmarket</h1>
         <div class="three columns summary-box">
           <span class="summary-desc">posts in last 24h</span>
           <span v-if="checktfHError" class="summary-error">error getting information :(</span>
@@ -19,20 +20,29 @@
           <span v-show="checkMinusError" class="summary-error">error getting information :(</span>
           <span v-show="!checkMinusError" class="summary-info">{{ getPostsSince }}</span>
         </div>
+        <div class="three columns summary-box">
+          <span class="summary-desc">posts that involve selling</span>
+          <span class="summary-info -selling">{{ getSellingLength }}</span>
+        </div>
+        <div class="three columns summary-box">
+          <span class="summary-desc">posts that involve buying</span>
+          <span class="summary-info -buying">{{ getBuyingLength }}</span>
+        </div>
           <!-- <svg class="icon icon-search"><use xlink:href="#icon-search"></use></svg> -->
           <!-- <input v-model="searchObj" type="text" class="form-control search-input" placeholder="Search MechMarket eg. DSA, Let's Split, HHKB" aria-describedby="u-addon" autocapitalize="off" autocorrect="off"> -->
           <!-- <button @click="fetchData()" class="btn btn-secondary" type="button" :disabled="isLoading">Analyse</button> -->
-         <!--  <div class="menu-wrapper">
-            <ul>
-              <li v-on:click='toggleSource(), fetchData("new")' :class='{ active: checkNew }' class="item">new</li>
-              <li v-on:click='toggleSource(), fetchData("hot")' :class='{ active: !checkNew }' class="item">hot</li>
-              <li v-on:click='toggleCategory("buying")' :class='{ Tactive: currentCategory.buying }' class="item -buying">buying</li>
-              <li v-on:click='toggleCategory("selling")' :class='{ Tactive: currentCategory.selling }' class="item -selling">selling</li>
-              <li v-on:click='toggleCategory("trading")' :class='{ Tactive: currentCategory.trading }' class="item -trading">trading</li>
-            </ul>
-          </div> -->
         </div>
+        </transition>
+        <div class="menu-wrapper">
+          <ul>
+            <li v-on:click='toggleSource(), fetchData("new")' :class='{ active: checkNew }' class="item"><i class="fa fa-paper-plane" aria-hidden="true"></i></li>
+            <li v-on:click='toggleSource(), fetchData("hot")' :class='{ active: !checkNew }' class="item"><i class="fa fa-fire" aria-hidden="true"></i></li>
+            <li v-on:click='toggleCategory("buying")' :class='{ Tactive: currentCategory.buying }' class="item -buying">buying</li>
+            <li v-on:click='toggleCategory("selling")' :class='{ Tactive: currentCategory.selling }' class="item -selling">selling</li>
+            <li v-on:click='toggleCategory("trading")' :class='{ Tactive: currentCategory.trading }' class="item -trading">trading</li>
+          </ul>
         </div>
+      </div>
       </div>
     </div>
     <post-summary :newPosts="newPosts"
@@ -44,7 +54,8 @@
                   :soldPosts="soldPosts"
                   :stickyPosts="stickyPosts"
                   :currentCategory="currentCategory"
-                  :searchObj="searchObj">
+                  :searchObj="searchObj"
+                  :epoch="epoch">
     </post-summary>
   </div>
 </template>
@@ -81,8 +92,7 @@ export default {
       isLoading: false,
       notFound: false,
       noPosts: true,
-      isBuying: true,
-      isSelling: false,
+      summary: true,
       // Control whether the user is getting new or hot posts
       currentSource: {
         sortnew: '',
@@ -133,11 +143,7 @@ export default {
     this.fetchEpoch24H();
     this.fetchEpochLast();
     // this.fetchStickied('hot');
-  },
-  destroy() {
-    this.lastVisitEpoch = Math.round(new Date() / 1000);
-    store.setVisitEpoch(this.lastVisitEpoch);
-    console.log('called');
+    window.addEventListener('beforeunload', this.leaving);
   },
   computed: {
     valid() {
@@ -147,12 +153,21 @@ export default {
       if (!this.comments.length && !this.submitted.length) return;
       return this.finished.comments && this.finished.submitted;
     },
+    showSummary() {
+      return this.currentCategory.buying || this.currentCategory.selling || this.currentCategory.trading;
+    },
     checkNew() {
       // Log whats going on
       console.log('new(comp)');
       console.log(this.currentSource.sortnew);
       // This return determines whether or not 'new' or 'hot' category is shown
       return this.currentSource.sortnew;
+    },
+    getBuyingLength() {
+      return this.buyingPosts.length;
+    },
+    getSellingLength() {
+      return this.sellingPosts.length;
     },
     getPosts24H() {
       return this.postsSinceEpochMinus;
@@ -179,6 +194,11 @@ export default {
       this.gbPosts = [],
       this.soldPosts = []
     },
+    leaving() {
+      console.log('called');
+      this.lastVisitEpoch = Math.round(new Date() / 1000);
+      store.setVisitEpoch(this.lastVisitEpoch);
+    },
     // Switches between 'new' and 'hot' and saves it to localStorage
     toggleSource() {
       console.log('toggling source');
@@ -187,9 +207,16 @@ export default {
       store.setSource(this.currentSource.sortnew, this.currentSource.sorthot);
     },
     // Toggles whether a category is shown or not
+    // There 100% is a better way to do this I'm sure
     toggleCategory(category) {
-      if (category in this.currentCategory) {
-        this.currentCategory[category] = !this.currentCategory[category];
+      console.log(category);
+      if (this.currentCategory[category] == true) {
+        this.currentCategory[category] = false;
+      } else {
+        for (var cat in this.currentCategory) {
+          this.currentCategory[cat] = false;
+        }
+        this.currentCategory[category] = true;
       }
     },
     // Directs to fetching the specific source and clears the data that is currently shown
@@ -321,6 +348,47 @@ export default {
 </script>
 
 <style lang="scss">
+@font-face {
+  font-family: HKLight;
+  src: url('../assets/fonts/HKGrotesk-Light.otf') format('opentype');
+}
+@font-face {
+  font-family: HKBold;
+  src: url('../assets/fonts/HKGrotesk-Bold.eot'); /* IE9 Compat Modes */
+  src: url('../assets/fonts/HKGrotesk-Bold.woff2') format('woff2'), /* Super Modern Browsers */
+       url('../assets/fonts/HKGrotesk-Bold.woff') format('woff'), /* Pretty Modern Browsers */
+       url('../assets/fonts/HKGrotesk-Bold.otf')  format('opentype'); /* Safari, Android, iOS */
+}
+@font-face {
+  font-family: HK;
+  src: url('../assets/fonts/HKGrotesk-Regular.eot'); /* IE9 Compat Modes */
+  src: url('../assets/fonts/HKGrotesk-Regular.woff2') format('woff2'), /* Super Modern Browsers */
+       url('../assets/fonts/HKGrotesk-Regular.woff') format('woff'); /* Pretty Modern Browsers */
+       /* url('HKGrotesk-Regular.otf')  format('opentype'); /* Safari, Android, iOS */
+}
+.slide-fade-enter-active {
+  transition: all .3s ease .3s;
+}
+.slide-fade-leave-active {
+  transition: all .3s cubic-bezier(1.0, 0.5, 0.8, 1.0);
+}
+.slide-fade-enter, .slide-fade-leave-to {
+  transform: translateX(10px);
+  opacity: 0;
+}
+
+.slide-down-fade-enter-active {
+  transition: all .3s cubic-bezier(1.0, 0.5, 0.8, 1.0) .3s;
+}
+.slide-down-fade-leave-active {
+  transition: all cubic-bezier(1.0, 0.5, 0.8, 1.0);
+}
+.slide-down-fade-enter, .slide-down-fade-leave-to {
+  transform: translateY(10px);
+  opacity: 0;
+}
+.slide-down-fade-enter-to {
+}
 html {
   box-sizing: border-box;
   font-size: 62.5%;
@@ -328,15 +396,7 @@ html {
 body {
   margin: 0;
   padding: 0;
-  font-family: 'Avenir', -apple-system,
-          BlinkMacSystemFont,
-          "Segoe UI",
-          Roboto,
-          Oxygen-Sans,
-          Ubuntu,
-          Cantarell,
-          "Helvetica Neue",
-          sans-serif;
+  font-family: HK;
   // background-color: #fff;
   background-color: #F2F2F2;
   line-height: 1.6;
@@ -349,6 +409,12 @@ body {
   background: #FFF;
   margin-left: 0% !important;
   &:nth-of-type(1) {
+    background: darken(#FFF, 1%) !important;
+  }
+  &:nth-of-type(2) {
+    background: darken(#FFF, 1%) !important;
+  }
+  &:not(:last-of-type) {
     &:after {
       display: block;
       content: '';
@@ -365,8 +431,9 @@ body {
     top: 25%;
     left: 20%;
     text-transform: uppercase;
-    font-size: 1.3rem;
+    font-size: 1.5rem;
     color: #9e9e9e;
+    font-family: HKLight;
   }
   .summary-error {
     position: absolute;
@@ -377,20 +444,23 @@ body {
     color: #5b92fa;
   }
   .summary-info {
+    font-family: HKBold;
     position: absolute;
     top: 27%;
     margin-left: -32%;
     font-size: 6rem;
-    color: #5b92fa;
+    color: #2c2c3d;
   }
 }
 .summary {
   color: darken(#42425A,10%);
   font-weight: 300;
   font-size: 4rem;
-  width: 4em;
-  left: 16vw;
+  // width: 4em;
+  margin-top: -2em;
+  // left: 16vw;
   position: absolute;
+  font-family: HKLight;
 }
 .search-wrapper {
   width: 85vw;
@@ -404,41 +474,42 @@ body {
   background-color: darken(#42425A,10%);
   position: fixed;
   z-index: 101;
-  .menu-wrapper {
-    position: absolute;
-    left: 0;
-    bottom: 0;
-    ul {
-      // width: 120px;
-      li {
-        display: inline-block;
-        left: 0;
-        margin-bottom: 2em;
-        cursor: pointer;
-        color: darken(#ECECEC, 20%);
-        font-size: 2rem;
-        &.item {
-          margin: .5em 1em .5em 1em;
-        }
-        &.-selling {
-          color: #f5b400;
-        }
-        &.-buying {
-          color: #5b92fa;
-        }
-        &.-trading {
-          color: #9f46f2;
-        }
-        &.active {
-          text-decoration: underline;
-          color: #333333;
-        }
-        &.Tactive {
-          text-decoration: underline;
-        }
+}
+.menu-wrapper {
+  position: absolute;
+  top: 10vh;
+  left: 0;
+  ul {
+    // padding-left: 2em;
+    li {
+      text-align: left;
+      display: block;
+      left: 0;
+      margin-bottom: 2em;
+      cursor: pointer;
+      color: darken(#ECECEC, 20%);
+      font-size: 2rem;
+      &.item {
+        margin: .5em 1em .5em 1em;
+      }
+      &.active {
+        text-decoration: underline;
+        color: #333333;
+      }
+      &.Tactive {
+        text-decoration: underline;
       }
     }
   }
+}
+.-selling {
+  color: #f5b400 !important;
+}
+.-buying {
+  color: #5b92fa !important;
+}
+.-trading {
+  color: #9f46f2 !important;
 }
 .form-control {
   background-color: darken(#42425A,10%);
